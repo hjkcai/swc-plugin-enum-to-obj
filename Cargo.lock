@@ -1386,6 +1386,7 @@ dependencies = [
  "swc_ecma_parser",
  "swc_ecma_transforms_base",
  "swc_ecma_transforms_testing",
+ "swc_ecma_utils",
  "swc_ecma_visit",
  "swc_plugin",
  "swc_plugin_macro",
@@ -1603,7 +1604,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "swc_plugin_add_display_name"
+name = "swc_plugin_enum_to_obj"
 version = "0.2.0"
 dependencies = [
  "serde",
