@@ -15,6 +15,7 @@ mod test {
     use swc_core::common::{chain, Mark};
     use swc_core::ecma::transforms::base::resolver;
     use swc_core::ecma::transforms::testing::Tester;
+    use swc_core::ecma::transforms::typescript::strip;
     use swc_core::ecma::{
         parser::{Syntax, TsConfig},
         transforms::testing::test,
@@ -30,14 +31,53 @@ mod test {
     });
 
     fn runner(_: &mut Tester) -> impl Fold {
+        let unresolved_mark = Mark::new();
+        let top_level_mark = Mark::new();
         chain!(
-            resolver(Mark::new(), Mark::new(), false),
+            resolver(unresolved_mark, top_level_mark, true),
+            strip(top_level_mark),
             as_folder(super::EnumToObjVisitor)
         )
     }
 
     test!(SYNTAX, runner,
-        /* Name */ bare_compiled_enum,
+        /* Name */ normal_enum,
+        /* Input */ r#"
+            enum Foo {
+                A,
+                B
+            }
+        "#,
+        /* Output */ r#"
+            var Foo = {
+                "A": 0,
+                0: "A",
+                "B": 1,
+                1: "B",
+            };
+        "#
+    );
+
+    test!(SYNTAX, runner,
+        /* Name */ exported_enum,
+        /* Input */ r#"
+            enum Foo {
+                A,
+                B
+            }
+        "#,
+        /* Output */ r#"
+            var Foo = {
+                "A": 0,
+                0: "A",
+                "B": 1,
+                1: "B",
+            };
+        "#
+    );
+
+    test!(SYNTAX, runner,
+        /* Name */ normal_compiled_enum,
         /* Input */ r#"
             var Foo;
             (function(Foo) {
@@ -56,7 +96,7 @@ mod test {
     );
 
     test!(SYNTAX, runner,
-        /* Name */ export_compiled_enum,
+        /* Name */ exported_compiled_enum,
         /* Input */ r#"
             export var Foo;
             (function(Foo) {
