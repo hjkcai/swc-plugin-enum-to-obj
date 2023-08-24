@@ -89,7 +89,7 @@ fn var_iife<'a>(var_decls: &'a Box<VarDecl>, next_stmt: &'a ModuleItem) -> Optio
     if left_ident_name != name { return None; }
 
     // (X = {})
-    let right_assign = bin.right.as_paren()?.expr.as_assign()?;
+    let right_assign = unwrap_paren(bin.right.as_ref()).as_assign()?;
     if right_assign.right.as_object()?.props.len() != 0 { return None; }
     match right_assign.op {
         AssignOp::Assign => (),
@@ -99,7 +99,7 @@ fn var_iife<'a>(var_decls: &'a Box<VarDecl>, next_stmt: &'a ModuleItem) -> Optio
     let right_ident_name = right_assign.left.as_ident()?.sym.to_string();
     if right_ident_name != name { return None; }
 
-    let fn_expr = call_expr.callee.as_expr()?.as_paren()?.expr.as_fn_expr()?;
+    let fn_expr = unwrap_paren(call_expr.callee.as_expr()?).as_fn_expr()?;
     if let Some(_) = fn_expr.ident { return None; } // ensure anonymous
 
     let fn_params = &fn_expr.function.params;
@@ -217,5 +217,13 @@ fn as_call(expr: &Expr) -> Option<&CallExpr> {
     match expr {
         Expr::Call(call) => Some(call),
         _ => None,
+    }
+}
+
+fn unwrap_paren(expr: &Expr) -> &Expr {
+    if let Some(paren) = expr.as_paren() {
+        paren.expr.as_ref()
+    } else {
+        expr
     }
 }
