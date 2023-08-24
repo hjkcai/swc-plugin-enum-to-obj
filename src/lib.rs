@@ -37,33 +37,39 @@ mod test {
     }
 
     test!(SYNTAX, runner,
-        /* Name */ bare_enum,
+        /* Name */ bare_compiled_enum,
         /* Input */ r#"
-            enum Foo {
-                A,
-                B
-            }
+            var Foo;
+            (function(Foo) {
+                Foo[Foo["A"] = 0] = "A";
+                Foo[Foo["B"] = 1] = "B";
+            })(Foo || (Foo = {}));
         "#,
         /* Output */ r#"
-            const Foo = {
+            var Foo = {
                 "A": 0,
-                "B": 1
+                0: "A",
+                "B": 1,
+                1: "B",
             };
         "#
     );
 
     test!(SYNTAX, runner,
-        /* Name */ export_enum,
+        /* Name */ export_compiled_enum,
         /* Input */ r#"
-            export enum Foo {
-                A,
-                B
-            }
+            export var Foo;
+            (function(Foo) {
+                Foo[Foo["A"] = 0] = "A";
+                Foo[Foo["B"] = 1] = "B";
+            })(Foo || (Foo = {}));
         "#,
         /* Output */ r#"
-            export const Foo = {
+            export var Foo = {
                 "A": 0,
-                "B": 1
+                0: "A",
+                "B": 1,
+                1: "B",
             };
         "#
     );

@@ -1,10 +1,7 @@
-use swc_core::common::{DUMMY_SP, Span, Spanned};
-use swc_core::common::collections::AHashMap;
+use swc_core::common::DUMMY_SP;
 use swc_core::ecma::{
     ast::*,
-    atoms::JsWord,
-    visit::{VisitMut, VisitMutWith, noop_visit_mut_type},
-    utils::ExprFactory,
+    visit::{VisitMut, VisitMutWith},
 };
 
 pub struct EnumToObjVisitor;
@@ -14,307 +11,211 @@ impl VisitMut for EnumToObjVisitor {
         stmts.visit_mut_children_with(self);
 
         let mut replacements: Vec<(usize, ModuleItem)> = Vec::new();
-        stmts.iter_mut().enumerate().for_each(|(i, stmt)| {
-            if let Some(e) = ts_enum_decl(stmt) {
-                let item = ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(handle_enum(e)))));
-                replacements.push((i, item));
-            }
+        stmts.iter().enumerate().for_each(|(i, stmt)| {
+            if i + 1 == stmts.len() { return; }
+            let next_stmt = stmts.get(i + 1).unwrap();
 
-            if let Some(e) = export_ts_enum(stmt) {
-                let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
-                    span: DUMMY_SP,
-                    decl: Decl::Var(Box::new(handle_enum(e)))
-                }));
-
-                replacements.push((i, item));
-            }
-        });
-
-        replacements.iter().enumerate().for_each(|(_, entry)| {
-            let (i, item) = entry.clone();
-            stmts.remove(i);
-            stmts.insert(i, item);
-        })
-    }
-}
-
-fn ts_enum_decl(stmt: &mut ModuleItem) -> Option<&Box<TsEnumDecl>> {
-    Some(stmt.as_mut_stmt()?.as_decl()?.as_ts_enum()?)
-}
-
-fn export_ts_enum(stmt: &mut ModuleItem) -> Option<&Box<TsEnumDecl>> {
-    Some(stmt.as_mut_module_decl()?.as_mut_export_decl()?.decl.as_ts_enum()?)
-}
-
-/// Value does not contain TsLit::Bool
-type EnumValues = AHashMap<JsWord, Option<TsLit>>;
-
-fn handle_enum(e: &Box<TsEnumDecl>) -> VarDecl {
-    /// Called only for enums.
-    ///
-    /// If both of the default value and the initialization is None, this
-    /// method returns [Err].
-    fn compute(
-        e: &TsEnumDecl,
-        span: Span,
-        values: &mut EnumValues,
-        default: Option<i64>,
-        init: Option<&Expr>,
-    ) -> Result<TsLit, ()> {
-        fn compute_bin(
-            e: &TsEnumDecl,
-            span: Span,
-            values: &mut EnumValues,
-            expr: &BinExpr,
-        ) -> Result<TsLit, ()> {
-            let l = compute(e, span, values, None, Some(&expr.left))?;
-            let r = compute(e, span, values, None, Some(&expr.right))?;
-
-            Ok(match (l, r) {
-                (
-                    TsLit::Number(Number { value: l, .. }),
-                    TsLit::Number(Number { value: r, .. }),
-                ) => {
-                    TsLit::Number(Number {
-                        span,
-                        value: match expr.op {
-                            op!(bin, "+") => l + r,
-                            op!(bin, "-") => l - r,
-                            op!("*") => l * r,
-                            op!("/") => l / r,
-
-                            // TODO
-                            op!("&") => ((l.trunc() as i32) & (r.trunc() as i32)) as _,
-                            op!("|") => ((l.trunc() as i32) | (r.trunc() as i32)) as _,
-                            op!("^") => ((l.trunc() as i32) ^ (r.trunc() as i32)) as _,
-                            op!("<<") => (l.trunc() as i32).wrapping_shl(r.trunc() as u32) as _,
-                            op!(">>") => (l.trunc() as i32).wrapping_shr(r.trunc() as u32) as _,
-                            // TODO: Verify this
-                            op!(">>>") => {
-                                (l.trunc() as u32).wrapping_shr(r.trunc() as u32) as _
-                            }
-
-                            _ => return Err(()),
-                        },
-                        raw: None,
-                    })
-                }
-                (TsLit::Str(l), TsLit::Str(r)) if expr.op == op!(bin, "+") => {
-                    let value = format!("{}{}", l.value, r.value);
-
-                    TsLit::Str(Str {
-                        span,
-                        raw: None,
-                        value: value.into(),
-                    })
-                }
-                (TsLit::Number(l), TsLit::Str(r)) if expr.op == op!(bin, "+") => {
-                    let value = format!("{}{}", l.value, r.value);
-
-                    TsLit::Str(Str {
-                        span,
-                        raw: None,
-                        value: value.into(),
-                    })
-                }
-                (TsLit::Str(l), TsLit::Number(r)) if expr.op == op!(bin, "+") => {
-                    let value = format!("{}{}", l.value, r.value);
-
-                    TsLit::Str(Str {
-                        span,
-                        raw: None,
-                        value: value.into(),
-                    })
-                }
-                _ => return Err(()),
-            })
-        }
-
-        if let Some(expr) = init {
-            match expr {
-                Expr::Lit(Lit::Str(s)) => return Ok(TsLit::Str(s.clone())),
-                Expr::Lit(Lit::Num(s)) => return Ok(TsLit::Number(s.clone())),
-                Expr::Bin(ref bin) => return compute_bin(e, span, values, bin),
-                Expr::Paren(ref paren) => {
-                    return compute(e, span, values, default, Some(&paren.expr))
-                }
-
-                Expr::Ident(ref id) => {
-                    if let Some(Some(v)) = values.get(&id.sym) {
-                        return Ok(v.clone());
-                    }
-                    return Err(());
-                }
-                Expr::Unary(ref expr) => {
-                    let v = compute(e, span, values, None, Some(&expr.arg))?;
-                    match v {
-                        TsLit::BigInt(BigInt { .. }) => {}
-                        TsLit::Number(Number { value: v, .. }) => {
-                            return Ok(TsLit::Number(Number {
-                                span,
-                                value: match expr.op {
-                                    op!(unary, "+") => v,
-                                    op!(unary, "-") => -v,
-                                    op!("!") => {
-                                        if v == 0.0f64 {
-                                            0.0
-                                        } else {
-                                            1.0
-                                        }
-                                    }
-                                    op!("~") => (!(v as i32)) as f64,
-                                    _ => return Err(()),
-                                },
-                                raw: None,
-                            }))
-                        }
-                        TsLit::Str(_) => {}
-                        TsLit::Bool(_) => {}
-                        TsLit::Tpl(_) => {}
+            if let Some(var_decls) = as_var_decls(stmt) {
+                if let Some((enum_id, enum_stmts)) = var_iife(var_decls, next_stmt) {
+                    if let Some(enum_items) = extract_enum(enum_id, enum_stmts) {
+                        let obj_decl = build_obj_decl(enum_id, &enum_items);
+                        let item = ModuleItem::Stmt(Stmt::Decl(Decl::Var(Box::new(obj_decl))));
+                        replacements.push((i, item));
                     }
                 }
+            }
 
-                Expr::Tpl(ref t) if t.exprs.is_empty() => {
-                    if let Some(v) = &t.quasis[0].cooked {
-                        return Ok(TsLit::Str(Str {
-                            span,
-                            raw: None,
-                            value: JsWord::from(&**v),
+            if let Some(var_decls) = as_export_var_decls(stmt) {
+                if let Some((enum_id, enum_stmts)) = var_iife(var_decls, next_stmt) {
+                    if let Some(enum_items) = extract_enum(enum_id, enum_stmts) {
+                        let obj_decl = build_obj_decl(enum_id, &enum_items);
+                        let item = ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(ExportDecl {
+                            span: DUMMY_SP,
+                            decl: Decl::Var(Box::new(obj_decl)),
                         }));
+                        replacements.push((i, item));
                     }
                 }
-
-                _ => {}
-            }
-        } else if let Some(value) = default {
-            return Ok(TsLit::Number(Number {
-                span,
-                value: value as _,
-                raw: None,
-            }));
-        }
-
-        Err(())
-    }
-
-    let id = e.id.clone();
-
-    let mut default = 0;
-    let mut values = Default::default();
-    let members = e
-        .members
-        .clone()
-        .into_iter()
-        .map(|m| -> Result<_, ()> {
-            let id_span = m.id.span();
-            let val = compute(&e, id_span, &mut values, Some(default), m.init.as_deref())
-                .map(|val| {
-                    if let TsLit::Number(ref n) = val {
-                        default = n.value as i64 + 1;
-                    }
-                    values.insert(m.id.as_ref().clone(), Some(val.clone()));
-
-                    match val {
-                        TsLit::Number(v) => Expr::Lit(Lit::Num(v)),
-                        TsLit::Str(v) => Expr::Lit(Lit::Str(v)),
-                        TsLit::Bool(v) => Expr::Lit(Lit::Bool(v)),
-                        TsLit::Tpl(v) => {
-                            let value = v.quasis.into_iter().next().unwrap().raw;
-
-                            Expr::Lit(Lit::Str(Str {
-                                span: v.span,
-                                raw: None,
-                                value: JsWord::from(&*value),
-                            }))
-                        }
-                        TsLit::BigInt(v) => Expr::Lit(Lit::BigInt(v)),
-                    }
-                })
-                .or_else(|err| match &m.init {
-                    None => Err(err),
-                    Some(v) => {
-                        let mut v = *v.clone();
-                        let mut visitor = EnumValuesVisitor {
-                            previous: &values,
-                            ident: &id,
-                        };
-                        visitor.visit_mut_expr(&mut v);
-
-                        values.insert(m.id.as_ref().clone(), None);
-
-                        Ok(v)
-                    }
-                })?;
-
-            Ok((m, val))
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap_or_else(|_| panic!("invalid value for enum is detected"));
-
-    let a = members
-        .into_iter()
-        .map(|(m, val)| {
-            let name = match m.id {
-                TsEnumMemberId::Str(s) => s,
-                TsEnumMemberId::Ident(i) => Str {
-                    span: i.span,
-                    raw: None,
-                    value: i.sym,
-                },
-            };
-
-            KeyValueProp {
-                key: PropName::Str(name),
-                value: Box::new(val)
             }
         });
 
-    let (sym, ctx) = e.id.to_id();
+        replacements.iter().enumerate().for_each(|(j, entry)| {
+            let (i, item) = entry.clone();
+            let index = i - j;
+            stmts.remove(index);
+            stmts.remove(index);
+            stmts.insert(index, item);
+        })
+    }
+}
+
+fn as_var_decls(stmt: &ModuleItem) -> Option<&Box<VarDecl>> {
+    stmt.as_stmt()?.as_decl()?.as_var()
+}
+
+fn as_export_var_decls(stmt: &ModuleItem) -> Option<&Box<VarDecl>> {
+    stmt.as_module_decl()?.as_export_decl()?.decl.as_var()
+}
+
+fn var_iife<'a>(var_decls: &'a Box<VarDecl>, next_stmt: &'a ModuleItem) -> Option<(&'a Ident, &'a Vec<Stmt>)> {
+    // Find 'var X' pattern in the first statement.
+    match var_decls.kind {
+        VarDeclKind::Var => (),
+        _ => return None,
+    };
+
+    let decls = &var_decls.decls;
+    if decls.len() != 1 { return None; } // Make sure it contains only 1 declaration
+
+    let decl = decls.get(0)?;
+    if let Some(_) = decl.init { return None; } // without init expression.
+
+    // Record the name of the variable
+    let id = &decl.name.as_ident()?.id;
+    let name = id.sym.to_string();
+
+    // Find an IIFE in the second statement;
+    let call_expr = as_call(&*next_stmt.as_stmt()?.as_expr()?.expr)?;
+    if call_expr.args.len() != 1 { return None; }
+
+    // X || (X = {})
+    let bin = call_expr.args.get(0)?.expr.as_bin()?;
+    match bin.op {
+        BinaryOp::LogicalOr => (),
+        _ => return None,
+    };
+
+    let left_ident_name = bin.left.as_ident()?.sym.to_string();
+    if left_ident_name != name { return None; }
+
+    // (X = {})
+    let right_assign = bin.right.as_paren()?.expr.as_assign()?;
+    if right_assign.right.as_object()?.props.len() != 0 { return None; }
+    match right_assign.op {
+        AssignOp::Assign => (),
+        _ => return None,
+    };
+
+    let right_ident_name = right_assign.left.as_ident()?.sym.to_string();
+    if right_ident_name != name { return None; }
+
+    let fn_expr = call_expr.callee.as_expr()?.as_paren()?.expr.as_fn_expr()?;
+    if let Some(_) = fn_expr.ident { return None; } // ensure anonymous
+
+    let fn_params = &fn_expr.function.params;
+    if fn_params.len() != 1 { return None; }
+
+    let fn_param_name = fn_params.get(0)?.pat.as_ident()?.sym.to_string();
+    if fn_param_name != name { return None; }
+
+    match &fn_expr.function.body {
+        Some(fn_body) => Some((id, &fn_body.stmts)),
+        _ => None,
+    }
+}
+
+type EnumItems<'a> = Vec<(&'a Lit, &'a Expr)>;
+
+fn extract_enum<'a>(enum_id: &'a Ident, stmts: &'a Vec<Stmt>) -> Option<EnumItems<'a>> {
+    let mut items: EnumItems = Vec::new();
+    let result = stmts.iter().try_for_each(|stmt| {
+        extract_enum_item(enum_id, stmt)?.iter().for_each(|item| {
+            items.push(item.clone())
+        });
+
+        Some(())
+    });
+
+    match result {
+        Some(_) => Some(items),
+        _ => None,
+    }
+}
+
+fn extract_enum_item<'a>(enum_id: &Ident, stmt: &'a Stmt) -> Option<EnumItems<'a>> {
+    let enum_name = enum_id.sym.to_string();
+
+    let assign = stmt.as_expr()?.expr.as_assign()?;
+    if !is_equal_op(assign) { return None; }
+
+    let left_member = assign.left.as_expr()?.as_member()?;
+    if member_expr_ident_name(left_member)? != enum_name { return None; }
+
+    let left_member_computed = &left_member.prop.as_computed()?.expr;
+
+    // B["a"] = "x";
+    if let Some(lit) = left_member_computed.as_lit() {
+        return match lit {
+            &Lit::Str(_) => Some(vec![(lit, assign.right.as_ref())]),
+            _ => None,
+        };
+    }
+
+    // B[B["a"] = 1] = "a";
+    if let Some(inner_assign) = left_member_computed.as_assign() {
+        let inner_member_expr = inner_assign.left.as_expr()?.as_member()?;
+        if member_expr_ident_name(inner_member_expr)? != enum_name { return None; }
+        if !is_equal_op(inner_assign) { return None; }
+
+        let inner_member_name = inner_member_expr.prop.as_computed()?.expr.as_lit()?;
+        let inner_member_value = inner_assign.right.as_lit()?;
+
+        return match (inner_member_name, inner_member_value) {
+            (&Lit::Str(_), &Lit::Num(_)) => Some(vec![
+                (inner_member_name, inner_assign.right.as_ref()),
+                (inner_member_value, assign.right.as_ref()),
+            ]),
+            _ => None,
+        };
+    }
+
+    None
+}
+
+fn build_obj_decl(enum_id: &Ident, enum_items: &EnumItems) -> VarDecl {
     VarDecl {
-        span: e.span,
-        kind: VarDeclKind::Const,
+        span: DUMMY_SP,
+        kind: VarDeclKind::Var,
         declare: false,
         decls: vec![VarDeclarator {
             span: DUMMY_SP,
-            name: Ident::new(sym, DUMMY_SP.with_ctxt(ctx)).into(),
+            name: Pat::Ident(BindingIdent { id: enum_id.clone(), type_ann: None }),
             definite: false,
-            init: Some(Box::new(Expr::Object(ObjectLit {
-                span: DUMMY_SP,
-                props: a
-                    .map(|prop| {
-                        PropOrSpread::Prop(Box::new(Prop::KeyValue(prop)))
-                    })
-                    .collect()
-            })))
+            init: Some(Box::new(build_obj(&enum_items)))
         }]
     }
 }
 
-struct EnumValuesVisitor<'a> {
-    ident: &'a Ident,
-    previous: &'a EnumValues,
+fn build_obj(enum_items: &EnumItems) -> Expr {
+    let props = enum_items.iter().map(|&(k, v)| {
+        PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
+            key: match k {
+                Lit::Str(str) => PropName::Str(str.clone()),
+                Lit::Num(num) => PropName::Num(num.clone()),
+                _ => todo!(),
+            },
+            value: Box::new(v.clone())
+        })))
+    })
+    .collect();
+
+    Expr::Object(ObjectLit { span: DUMMY_SP, props })
 }
 
-impl VisitMut for EnumValuesVisitor<'_> {
-    noop_visit_mut_type!();
+fn is_equal_op(assign: &AssignExpr) -> bool {
+    match assign.op {
+        AssignOp::Assign => true,
+        _ => false,
+    }
+}
 
-    fn visit_mut_expr(&mut self, expr: &mut Expr) {
-        match expr {
-            Expr::Ident(ident) if self.previous.contains_key(&ident.sym) => {
-                *expr = self.ident.clone().make_member(ident.clone());
-            }
-            Expr::Member(MemberExpr {
-                obj,
-                // prop,
-                ..
-            }) => {
-                if let Expr::Ident(ident) = &**obj {
-                    if self.previous.get(&ident.sym).is_some() {
-                        **obj = self.ident.clone().make_member(ident.clone());
-                    }
-                }
-            }
-            _ => expr.visit_mut_children_with(self),
-        }
+fn member_expr_ident_name(member_expr: &MemberExpr) -> Option<String> {
+    Some(member_expr.obj.as_ident()?.sym.to_string())
+}
+
+fn as_call(expr: &Expr) -> Option<&CallExpr> {
+    match expr {
+        Expr::Call(call) => Some(call),
+        _ => None,
     }
 }
