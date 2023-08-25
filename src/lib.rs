@@ -61,13 +61,49 @@ mod test {
     test!(SYNTAX, runner,
         /* Name */ exported_enum,
         /* Input */ r#"
-            enum Foo {
+            export enum Foo {
+                A,
+                B
+            }
+        "#,
+        /* Output */ r#"
+            export var Foo = {
+                "A": 0,
+                0: "A",
+                "B": 1,
+                1: "B",
+            };
+        "#
+    );
+
+    test!(SYNTAX, runner,
+        /* Name */ const_enum,
+        /* Input */ r#"
+            const enum Foo {
                 A,
                 B
             }
         "#,
         /* Output */ r#"
             var Foo = {
+                "A": 0,
+                0: "A",
+                "B": 1,
+                1: "B",
+            };
+        "#
+    );
+
+    test!(SYNTAX, runner,
+        /* Name */ exported_const_enum,
+        /* Input */ r#"
+            export const enum Foo {
+                A,
+                B
+            }
+        "#,
+        /* Output */ r#"
+            export var Foo = {
                 "A": 0,
                 0: "A",
                 "B": 1,
