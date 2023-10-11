@@ -51,9 +51,9 @@ mod test {
         /* Output */ r#"
             var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
             };
         "#
     );
@@ -69,9 +69,9 @@ mod test {
         /* Output */ r#"
             export var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
             };
         "#
     );
@@ -80,19 +80,23 @@ mod test {
         /* Name */ const_enum,
         /* Input */ r#"
             const enum Foo {
-                A,
-                B
+                A = 0,
+                B = 1,
+                C = -1
             }
         "#,
         /* Output */ r#"
             var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
+                "C": -1,
+                [-1]: "C",
             };
         "#
     );
+
 
     test!(SYNTAX, runner,
         /* Name */ exported_const_enum,
@@ -105,9 +109,9 @@ mod test {
         /* Output */ r#"
             export var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
             };
         "#
     );
@@ -124,9 +128,9 @@ mod test {
         /* Output */ r#"
             var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
             };
         "#
     );
@@ -143,9 +147,9 @@ mod test {
         /* Output */ r#"
             export var Foo = {
                 "A": 0,
-                0: "A",
+                [0]: "A",
                 "B": 1,
-                1: "B",
+                [1]: "B",
             };
         "#
     );

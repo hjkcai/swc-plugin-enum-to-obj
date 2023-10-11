@@ -191,7 +191,7 @@ fn build_obj(enum_items: &EnumItems) -> Expr {
         PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
             key: match k {
                 Lit::Str(str) => PropName::Str(str.clone()),
-                Lit::Num(num) => PropName::Num(num.clone()),
+                Lit::Num(num) => PropName::Computed(ComputedPropName { span: num.span, expr: num.clone().into() }),
                 _ => todo!(),
             },
             value: Box::new(v.clone())
