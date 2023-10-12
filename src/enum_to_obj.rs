@@ -2,6 +2,7 @@ use swc_core::common::DUMMY_SP;
 use swc_core::ecma::{
     ast::*,
     visit::{VisitMut, VisitMutWith},
+    atoms::JsWord
 };
 
 pub struct EnumToObjVisitor;
@@ -191,7 +192,7 @@ fn build_obj(enum_items: &EnumItems) -> Expr {
         PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
             key: match k {
                 Lit::Str(str) => PropName::Str(str.clone()),
-                Lit::Num(num) => PropName::Num(num.clone()),
+                Lit::Num(num) => PropName::Str(Str { span: num.span, raw: num.clone().raw, value: JsWord::from(num.clone().value.to_string()) }),
                 _ => todo!(),
             },
             value: Box::new(v.clone())
