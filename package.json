@@ -1,6 +1,6 @@
 {
   "name": "swc-plugin-enum-to-obj",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An SWC plugin to convert TypeScript enums into plain objects!",
   "author": "hjkcai <huajingkun1214@gmail.com>",
   "license": "MIT",
