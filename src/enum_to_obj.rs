@@ -139,7 +139,7 @@ fn extract_enum_item<'a>(enum_id: &Ident, stmt: &'a Stmt) -> Option<EnumItems<'a
     let assign = stmt.as_expr()?.expr.as_assign()?;
     if !is_equal_op(assign) { return None; }
 
-    let left_member = assign.left.as_expr()?.as_member()?;
+    let left_member = assign.left.as_simple()?.as_member()?;
     if member_expr_ident_name(left_member)? != enum_name { return None; }
 
     let left_member_computed = &left_member.prop.as_computed()?.expr;
@@ -154,7 +154,7 @@ fn extract_enum_item<'a>(enum_id: &Ident, stmt: &'a Stmt) -> Option<EnumItems<'a
 
     // B[B["a"] = 1] = "a";
     if let Some(inner_assign) = left_member_computed.as_assign() {
-        let inner_member_expr = inner_assign.left.as_expr()?.as_member()?;
+        let inner_member_expr = inner_assign.left.as_simple()?.as_member()?;
         if member_expr_ident_name(inner_member_expr)? != enum_name { return None; }
         if !is_equal_op(inner_assign) { return None; }
 
