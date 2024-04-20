@@ -82,17 +82,16 @@ mod test {
             export const enum Foo {
                 A = 0,
                 B = 1,
-                C = -1
+                C = -1,
                 D = +2
             }
-            console.log(Foo.A)
         "#,
         /* Output */ r#"
-            var Foo = {
+            export var Foo = {
                 "A": 0,
-                0: "A",
+                "0": "A",
                 "B": 1,
-                1: "B",
+                "1": "B",
                 "C": -1,
                 "-1": "C",
                 "D": 2,
