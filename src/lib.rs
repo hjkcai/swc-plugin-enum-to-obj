@@ -18,7 +18,7 @@ mod test {
     use swc_core::ecma::transforms::typescript::strip;
     use swc_core::ecma::{
         parser::{Syntax, TsConfig},
-        transforms::testing::test,
+        transforms::testing::test_inline,
         visit::{as_folder, Fold},
     };
 
@@ -40,7 +40,7 @@ mod test {
         )
     }
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ normal_enum,
         /* Input */ r#"
             enum Foo {
@@ -58,7 +58,7 @@ mod test {
         "#
     );
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ exported_enum,
         /* Input */ r#"
             export enum Foo {
@@ -76,15 +76,16 @@ mod test {
         "#
     );
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ const_enum,
         /* Input */ r#"
-            const enum Foo {
+            export const enum Foo {
                 A = 0,
                 B = 1,
                 C = -1
                 D = +2
             }
+            console.log(Foo.A)
         "#,
         /* Output */ r#"
             var Foo = {
@@ -101,7 +102,7 @@ mod test {
     );
 
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ exported_const_enum,
         /* Input */ r#"
             export const enum Foo {
@@ -119,7 +120,7 @@ mod test {
         "#
     );
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ normal_compiled_enum,
         /* Input */ r#"
             var Foo;
@@ -138,7 +139,7 @@ mod test {
         "#
     );
 
-    test!(SYNTAX, runner,
+    test_inline!(SYNTAX, runner,
         /* Name */ exported_compiled_enum,
         /* Input */ r#"
             export var Foo;
