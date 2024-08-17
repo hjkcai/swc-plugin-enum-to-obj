@@ -50,7 +50,7 @@ mod test {
                 B
             }
         "#,
-        r#"
+        /* Output */ r#"
             var Foo = {
                 "A": 0,
                 "0": "A",
