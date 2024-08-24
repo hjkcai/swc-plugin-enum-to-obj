@@ -139,7 +139,11 @@ fn extract_enum_item<'a>(enum_id: &Ident, stmt: &'a Stmt) -> Option<EnumItems<'a
     let assign = stmt.as_expr()?.expr.as_assign()?;
     if !is_equal_op(assign) { return None; }
 
-    let left_member = assign.left.as_simple()?.as_member()?;
+    // Promise AssignTarget::Pat(e.g. let [a, b] = [1, 2]) during enum extract is unreachable
+    let left_member = match &assign.left {
+        AssignTarget::Simple(at) => at.as_member(),
+        AssignTarget::Pat(_at) => None
+    }?;
     if member_expr_ident_name(left_member)? != enum_name { return None; }
 
     let left_member_computed = &left_member.prop.as_computed()?.expr;
@@ -154,7 +158,10 @@ fn extract_enum_item<'a>(enum_id: &Ident, stmt: &'a Stmt) -> Option<EnumItems<'a
 
     // B[B["a"] = 1] = "a";
     if let Some(inner_assign) = left_member_computed.as_assign() {
-        let inner_member_expr = inner_assign.left.as_simple()?.as_member()?;
+        let inner_member_expr = match &inner_assign.left {
+            AssignTarget::Simple(at) => at.as_member(),
+            AssignTarget::Pat(_at) => None
+        }?;
         if member_expr_ident_name(inner_member_expr)? != enum_name { return None; }
         if !is_equal_op(inner_assign) { return None; }
 
@@ -183,7 +190,8 @@ fn build_obj_decl(enum_id: &Ident, enum_items: &EnumItems) -> VarDecl {
             name: Pat::Ident(BindingIdent { id: enum_id.clone(), type_ann: None }),
             definite: false,
             init: Some(Box::new(build_obj(&enum_items)))
-        }]
+        }],
+        ..Default::default()
     }
 }
 

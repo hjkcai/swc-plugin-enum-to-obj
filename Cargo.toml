@@ -12,7 +12,7 @@ lto = true
 
 [dependencies]
 serde = "1"
-swc_core = { version = "0.90.*", features = ["ecma_plugin_transform", "ecma_transforms_typescript", "__parser", "__utils"] }
+swc_core = { version = "0.99.5", features = ["ecma_plugin_transform", "ecma_transforms_typescript", "__parser", "__utils"] }
 
 # cargo build-wasi generates wasm-wasi32 binary
 # cargo build-wasm32 generates wasm32-unknown-unknown binary.

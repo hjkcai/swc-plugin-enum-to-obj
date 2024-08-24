@@ -17,12 +17,12 @@ mod test {
     use swc_core::ecma::transforms::testing::Tester;
     use swc_core::ecma::transforms::typescript::strip;
     use swc_core::ecma::{
-        parser::{Syntax, TsConfig},
-        transforms::testing::test_inline,
+        parser::{Syntax, TsSyntax},
+        transforms::testing::{test_inline, test},
         visit::{as_folder, Fold},
     };
 
-    const SYNTAX: Syntax = Syntax::Typescript(TsConfig {
+    const SYNTAX: Syntax = Syntax::Typescript(TsSyntax {
         tsx: true,
         decorators: false,
         dts: false,
@@ -35,12 +35,14 @@ mod test {
         let top_level_mark = Mark::new();
         chain!(
             resolver(unresolved_mark, top_level_mark, true),
-            strip(top_level_mark),
+            strip(unresolved_mark, top_level_mark),
             as_folder(super::EnumToObjVisitor)
         )
     }
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ normal_enum,
         /* Input */ r#"
             enum Foo {
@@ -58,7 +60,9 @@ mod test {
         "#
     );
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ exported_enum,
         /* Input */ r#"
             export enum Foo {
@@ -76,7 +80,9 @@ mod test {
         "#
     );
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ const_enum,
         /* Input */ r#"
             export const enum Foo {
@@ -101,7 +107,9 @@ mod test {
     );
 
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ exported_const_enum,
         /* Input */ r#"
             export const enum Foo {
@@ -119,7 +127,9 @@ mod test {
         "#
     );
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ normal_compiled_enum,
         /* Input */ r#"
             var Foo;
@@ -138,7 +148,9 @@ mod test {
         "#
     );
 
-    test_inline!(SYNTAX, runner,
+    test_inline!(
+        SYNTAX,
+        runner,
         /* Name */ exported_compiled_enum,
         /* Input */ r#"
             export var Foo;
